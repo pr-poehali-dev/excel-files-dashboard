@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Link } from "react-router-dom";
-import { FileSpreadsheet } from "lucide-react";
+import { FileSpreadsheet, TableProperties } from "lucide-react";
 
 const Index = () => {
   return (
@@ -21,6 +21,16 @@ const Index = () => {
                 <div className="flex flex-col items-start">
                   <span>Объединение Excel файлов</span>
                   <span className="text-xs text-muted-foreground">Соединение нескольких таблиц в одну</span>
+                </div>
+              </Button>
+            </Link>
+            
+            <Link to="/excel-consolidator">
+              <Button className="w-full flex items-center justify-start gap-2 h-14" variant="outline">
+                <TableProperties className="h-5 w-5 text-blue-600" />
+                <div className="flex flex-col items-start">
+                  <span>Сведение Excel файлов</span>
+                  <span className="text-xs text-muted-foreground">Создание сводных таблиц из нескольких файлов</span>
                 </div>
               </Button>
             </Link>

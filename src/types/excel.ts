@@ -17,3 +17,13 @@ export interface MergeOptions {
   ignoreEmptyCells: boolean;
   keyColumn: string | null;
 }
+
+/**
+ * Настройки для сведения Excel файлов
+ */
+export interface ConsolidationSettings {
+  consolidationType: "append" | "summary" | "pivot";
+  preserveHeaders: boolean;
+  skipEmptyRows: boolean;
+  aggregationFunction: string;
+}
