@@ -1,129 +1,115 @@
-import { useRef, useState, DragEvent, ChangeEvent } from "react";
-import { Card, CardContent } from "@/components/ui/card";
-import { FileSpreadsheet, Upload } from "lucide-react";
+import { useState, useRef } from "react";
+import { useToast } from "@/components/ui/use-toast";
 import { Button } from "@/components/ui/button";
+import { Upload, FileSpreadsheet } from "lucide-react";
 
 interface FileUploadAreaProps {
-  onFilesUpload: (files: File[]) => void;
+  onFileUpload: (files: File[]) => void;
 }
 
 /**
- * Компонент области загрузки файлов с поддержкой drag & drop
+ * Компонент области загрузки файлов с поддержкой drag&drop
  */
-const FileUploadArea = ({ onFilesUpload }: FileUploadAreaProps) => {
+const FileUploadArea = ({ onFileUpload }: FileUploadAreaProps) => {
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { toast } = useToast();
 
-  /**
-   * Обработчик начала перетаскивания файлов
-   */
-  const handleDragOver = (e: DragEvent<HTMLDivElement>) => {
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.stopPropagation();
     setIsDragging(true);
   };
 
-  /**
-   * Обработчик окончания перетаскивания файлов (без сброса)
-   */
-  const handleDragLeave = (e: DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
+  const handleDragLeave = () => {
     setIsDragging(false);
   };
 
-  /**
-   * Обработчик сброса файлов в область загрузки
-   */
-  const handleDrop = (e: DragEvent<HTMLDivElement>) => {
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.stopPropagation();
     setIsDragging(false);
-
-    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      const filesArray = Array.from(e.dataTransfer.files).filter(
-        file => file.type === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" || 
-               file.type === "application/vnd.ms-excel" ||
-               file.name.endsWith('.xlsx') || 
-               file.name.endsWith('.xls')
-      );
-      
-      if (filesArray.length > 0) {
-        onFilesUpload(filesArray);
-      }
-    }
+    
+    const { files } = e.dataTransfer;
+    handleFiles(files);
   };
 
-  /**
-   * Обработчик выбора файлов через проводник
-   */
-  const handleFileInputChange = (e: ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      const filesArray = Array.from(e.target.files);
-      onFilesUpload(filesArray);
-      // Сброс input после обработки
-      e.target.value = '';
+  const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files?.length) {
+      handleFiles(e.target.files);
     }
-  };
-
-  /**
-   * Открытие диалога выбора файлов
-   */
-  const handleOpenFileDialog = () => {
+    
+    // Сбрасываем значение input, чтобы можно было загрузить тот же файл снова
     if (fileInputRef.current) {
-      fileInputRef.current.click();
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const handleFiles = (fileList: FileList) => {
+    const files = Array.from(fileList);
+    const excelFiles = files.filter(file => {
+      const isExcel = 
+        file.type === 'application/vnd.ms-excel' || 
+        file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+        file.name.endsWith('.xlsx') || 
+        file.name.endsWith('.xls');
+        
+      if (!isExcel) {
+        toast({
+          title: "Неподдерживаемый формат",
+          description: `Файл "${file.name}" не является Excel-файлом`,
+          variant: "destructive",
+        });
+      }
+      
+      return isExcel;
+    });
+    
+    if (excelFiles.length > 0) {
+      onFileUpload(excelFiles);
     }
   };
 
   return (
-    <Card 
-      className={`border-2 border-dashed transition-colors ${
-        isDragging ? "border-primary bg-muted/50" : "border-muted-foreground/20"
-      }`}
+    <div 
+      className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors
+                ${isDragging ? 'border-primary bg-primary/5' : 'border-muted-foreground/20'}`}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
     >
-      <CardContent 
-        className="flex flex-col items-center justify-center py-10 text-center cursor-pointer"
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
-        onClick={handleOpenFileDialog}
+      <FileSpreadsheet className="h-10 w-10 mx-auto mb-4 text-muted-foreground" />
+      
+      <h3 className="text-lg font-medium mb-2">
+        {isDragging ? 'Отпустите файлы для загрузки' : 'Перетащите Excel файлы сюда'}
+      </h3>
+      
+      <p className="text-sm text-muted-foreground mb-4">
+        или воспользуйтесь стандартным диалогом выбора файлов
+      </p>
+      
+      <Button 
+        onClick={() => fileInputRef.current?.click()} 
+        variant="outline"
+        className="mx-auto flex items-center gap-2"
       >
-        <FileSpreadsheet className="h-10 w-10 mb-4 text-muted-foreground" />
-        
-        <h3 className="text-lg font-medium mb-2">
-          Перетащите Excel файлы сюда
-        </h3>
-        
-        <p className="text-sm text-muted-foreground mb-4">
-          или нажмите для выбора файлов
-        </p>
-        
-        <Button 
-          variant="secondary" 
-          className="flex items-center gap-2"
-          onClick={(e) => {
-            e.stopPropagation();
-            handleOpenFileDialog();
-          }}
-        >
-          <Upload className="h-4 w-4" />
-          Выбрать файлы
-        </Button>
-        
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept=".xlsx,.xls"
-          multiple
-          className="hidden"
-          onChange={handleFileInputChange}
-        />
-        
-        <p className="text-xs text-muted-foreground mt-4">
-          Поддерживаемые форматы: .xlsx, .xls
-        </p>
-      </CardContent>
-    </Card>
+        <Upload className="h-4 w-4" />
+        Выбрать файлы
+      </Button>
+      
+      <input
+        ref={fileInputRef}
+        type="file"
+        className="hidden"
+        accept=".xlsx,.xls"
+        multiple
+        onChange={handleFileInput}
+      />
+      
+      <p className="text-xs text-muted-foreground mt-4">
+        Поддерживаемые форматы: .xlsx, .xls
+      </p>
+    </div>
   );
 };
 

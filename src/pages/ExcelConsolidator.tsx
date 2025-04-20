@@ -7,8 +7,8 @@ import {
   CardTitle 
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { TableProperties } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { TableProperties, Download, ArrowLeftRight } from "lucide-react";
 
 // Импорт компонентов
 import FileUploadArea from "@/components/excel/FileUploadArea";
@@ -25,77 +25,81 @@ import { useExcelConsolidator } from "@/hooks/useExcelConsolidator";
 const ExcelConsolidator = () => {
   const {
     files,
-    settings,
     consolidatedData,
+    chartData,
+    availableColumns,
+    settings,
     handleFileUpload,
+    handleConsolidateFiles,
+    handleDownloadConsolidated,
+    toggleFileSelection,
     removeFile,
-    clearAllFiles,
-    handleConsolidate,
-    handleDownload,
-    updateSettings,
-    toggleFileSelection
+    selectAllFiles,
+    updateSettings
   } = useExcelConsolidator();
 
   return (
     <div className="container mx-auto p-6">
-      <div className="mb-6">
-        <Link to="/" className="text-sm text-muted-foreground hover:text-primary transition-colors">
-          &larr; Назад на главную
-        </Link>
-      </div>
-      
       <Card className="mb-8">
         <CardHeader>
-          <CardTitle className="text-2xl flex items-center gap-2">
-            <TableProperties className="text-blue-600 h-6 w-6" />
-            Сведение Excel файлов
-          </CardTitle>
+          <CardTitle className="text-2xl">Сведение Excel файлов</CardTitle>
           <CardDescription>
-            Загрузите файлы Excel для создания сводных таблиц и отчетов
+            Загрузите файлы Excel для их консолидации по заданным параметрам
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-6 md:grid-cols-2">
-            <div className="space-y-6">
-              <FileUploadArea onFilesUpload={handleFileUpload} />
-              <FilesList 
-                files={files} 
-                onToggleFileSelection={toggleFileSelection}
-                onRemoveFile={removeFile}
-                onClearAllFiles={clearAllFiles}
-              />
-            </div>
+          <Tabs defaultValue="files" className="space-y-6">
+            <TabsList className="grid grid-cols-3 w-[400px]">
+              <TabsTrigger value="files">Файлы</TabsTrigger>
+              <TabsTrigger value="settings">Настройки</TabsTrigger>
+              <TabsTrigger value="result" disabled={!consolidatedData}>Результат</TabsTrigger>
+            </TabsList>
             
-            <div className="space-y-6">
-              <ConsolidationSettings 
-                settings={settings} 
-                onUpdateSettings={updateSettings} 
-                disabled={files.length === 0}
-              />
+            <TabsContent value="files" className="space-y-6">
+              <FileUploadArea onFileUpload={handleFileUpload} />
               
-              <Button 
-                className="w-full"
-                size="lg"
-                onClick={handleConsolidate}
-                disabled={files.filter(f => f.selected).length === 0}
-              >
-                Свести данные
-              </Button>
-            </div>
-          </div>
-          
-          {consolidatedData && (
-            <div className="mt-8">
+              <div className="flex justify-between items-center pt-2">
+                <h3 className="text-lg font-medium">Загруженные файлы</h3>
+                <Button 
+                  onClick={handleConsolidateFiles}
+                  variant="secondary"
+                  className="flex items-center gap-2"
+                  disabled={files.filter(f => f.selected).length === 0}
+                >
+                  <ArrowLeftRight className="h-4 w-4" />
+                  Свести выбранные
+                </Button>
+              </div>
+              
+              <FilesList 
+                files={files}
+                onToggleSelection={toggleFileSelection}
+                onRemoveFile={removeFile}
+                onSelectAll={selectAllFiles}
+              />
+            </TabsContent>
+            
+            <TabsContent value="settings" className="space-y-6">
+              <ConsolidationSettings 
+                settings={settings}
+                onUpdateSettings={updateSettings}
+                availableColumns={availableColumns}
+                filesExist={files.length > 0}
+              />
+            </TabsContent>
+            
+            <TabsContent value="result" className="space-y-6">
               <ConsolidatedPreview 
                 data={consolidatedData}
-                onDownload={handleDownload}
+                chartData={chartData}
+                onDownload={handleDownloadConsolidated}
               />
-            </div>
-          )}
+            </TabsContent>
+          </Tabs>
         </CardContent>
         <CardFooter className="flex flex-col items-start gap-2 border-t p-4 text-sm text-muted-foreground">
           <p>Поддерживаемые форматы: .xlsx, .xls</p>
-          <p>Для корректного сведения файлы должны иметь совместимую структуру данных.</p>
+          <p>Доступны различные методы сведения данных: простое объединение, сводка и сводная таблица.</p>
         </CardFooter>
       </Card>
     </div>

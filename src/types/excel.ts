@@ -25,5 +25,7 @@ export interface ConsolidationSettings {
   consolidationType: "append" | "summary" | "pivot";
   preserveHeaders: boolean;
   skipEmptyRows: boolean;
-  aggregationFunction: string;
+  aggregationFunction: "sum" | "average" | "max" | "min" | "count";
+  groupByColumn: string | null;
+  valueColumns: string[];
 }

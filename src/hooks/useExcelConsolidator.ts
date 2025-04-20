@@ -4,7 +4,9 @@ import { FileData, ConsolidationSettings } from '@/types/excel';
 import { 
   consolidateExcelFiles, 
   downloadAsExcel, 
-  readExcelFile 
+  extractAvailableColumns,
+  readExcelFile,
+  prepareChartData
 } from '@/utils/excelConsolidator';
 
 /**
@@ -13,25 +15,46 @@ import {
 export function useExcelConsolidator() {
   const [files, setFiles] = useState<FileData[]>([]);
   const [consolidatedData, setConsolidatedData] = useState<any[] | null>(null);
+  const [chartData, setChartData] = useState<any[] | null>(null);
+  const [availableColumns, setAvailableColumns] = useState<string[]>([]);
   const [settings, setSettings] = useState<ConsolidationSettings>({
     consolidationType: "append",
     preserveHeaders: true,
     skipEmptyRows: true,
-    aggregationFunction: "sum"
+    aggregationFunction: "sum",
+    groupByColumn: null,
+    valueColumns: []
   });
   
   const { toast } = useToast();
 
+  // Обновление доступных столбцов при изменении списка файлов
+  useEffect(() => {
+    const columns = extractAvailableColumns(files);
+    setAvailableColumns(columns);
+    
+    // Если текущий groupByColumn больше не доступен, сбрасываем его
+    if (settings.groupByColumn && !columns.includes(settings.groupByColumn)) {
+      setSettings(prev => ({ ...prev, groupByColumn: null }));
+    }
+    
+    // Обновляем список выбранных столбцов для значений
+    setSettings(prev => ({
+      ...prev,
+      valueColumns: prev.valueColumns.filter(col => columns.includes(col))
+    }));
+  }, [files]);
+
   /**
    * Обработчик загрузки файлов
    */
-  const handleFileUpload = async (uploadedFiles: File[]) => {
-    if (!uploadedFiles.length) return;
+  const handleFileUpload = async (files: File[]) => {
+    if (!files.length) return;
     
     const newFiles: FileData[] = [];
     
     try {
-      for (const file of uploadedFiles) {
+      for (const file of files) {
         try {
           const fileData = await readExcelFile(file);
           
@@ -69,74 +92,78 @@ export function useExcelConsolidator() {
   };
 
   /**
-   * Обработчик удаления файла
-   */
-  const removeFile = (id: string) => {
-    setFiles(prev => prev.filter(file => file.id !== id));
-  };
-
-  /**
-   * Обработчик очистки всех файлов
-   */
-  const clearAllFiles = () => {
-    setFiles([]);
-    setConsolidatedData(null);
-  };
-
-  /**
    * Обработчик консолидации файлов
    */
-  const handleConsolidate = () => {
+  const handleConsolidateFiles = () => {
     const selectedFiles = files.filter(file => file.selected);
     
-    if (selectedFiles.length < 1) {
+    if (selectedFiles.length === 0) {
       toast({
-        title: "Нет файлов для сведения",
-        description: "Загрузите хотя бы один файл для сведения",
+        title: "Нет выбранных файлов",
+        description: "Выберите хотя бы один файл для обработки",
         variant: "destructive",
       });
       return;
     }
     
-    try {
-      const result = consolidateExcelFiles(selectedFiles, settings);
-      
-      if (!result || result.length === 0) {
-        toast({
-          title: "Ошибка сведения",
-          description: "Не удалось свести данные. Проверьте файлы и настройки.",
-          variant: "destructive",
-        });
-        return;
-      }
-      
-      setConsolidatedData(result);
-      
+    // Проверяем настройки
+    if (settings.consolidationType !== "append" && !settings.groupByColumn) {
       toast({
-        title: "Данные сведены",
-        description: `Успешно обработано ${selectedFiles.length} файлов`,
-      });
-    } catch (error) {
-      toast({
-        title: "Ошибка сведения",
-        description: "Произошла ошибка при сведении данных",
+        title: "Неполные настройки",
+        description: "Для сводки или сводной таблицы необходимо выбрать столбец для группировки",
         variant: "destructive",
       });
+      return;
     }
+    
+    if ((settings.consolidationType === "summary" || settings.consolidationType === "pivot") && 
+        settings.valueColumns.length === 0) {
+      toast({
+        title: "Неполные настройки",
+        description: "Необходимо выбрать хотя бы один столбец со значениями",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    // Выполняем консолидацию
+    const result = consolidateExcelFiles(selectedFiles, settings);
+    
+    if (!result) {
+      toast({
+        title: "Ошибка консолидации",
+        description: "Не удалось объединить данные",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    setConsolidatedData(result);
+    
+    // Подготавливаем данные для диаграммы
+    if (settings.groupByColumn) {
+      const chartData = prepareChartData(result, settings.groupByColumn);
+      setChartData(chartData);
+    }
+    
+    toast({
+      title: "Данные обработаны",
+      description: `Успешно обработано ${selectedFiles.length} файлов`,
+    });
   };
 
   /**
-   * Обработчик скачивания сведенного файла
+   * Обработчик скачивания консолидированного файла
    */
-  const handleDownload = () => {
+  const handleDownloadConsolidated = () => {
     if (!consolidatedData) return;
     
     try {
-      downloadAsExcel(consolidatedData, 'consolidated_data.xlsx');
+      downloadAsExcel(consolidatedData);
       
       toast({
         title: "Файл сохранен",
-        description: "Сведенный файл успешно скачан",
+        description: "Консолидированный файл успешно скачан",
       });
     } catch (error) {
       toast({
@@ -148,31 +175,47 @@ export function useExcelConsolidator() {
   };
 
   /**
-   * Обновление настроек сведения
+   * Переключение выбора файла
+   */
+  const toggleFileSelection = (id: string) => {
+    setFiles(files.map(file => 
+      file.id === id ? { ...file, selected: !file.selected } : file
+    ));
+  };
+
+  /**
+   * Удаление файла
+   */
+  const removeFile = (id: string) => {
+    setFiles(files.filter(file => file.id !== id));
+  };
+
+  /**
+   * Выбор всех файлов
+   */
+  const selectAllFiles = (selected: boolean) => {
+    setFiles(files.map(file => ({ ...file, selected })));
+  };
+
+  /**
+   * Обновление настроек консолидации
    */
   const updateSettings = (newSettings: Partial<ConsolidationSettings>) => {
     setSettings(prev => ({ ...prev, ...newSettings }));
   };
 
-  /**
-   * Переключение выбора файла
-   */
-  const toggleFileSelection = (id: string) => {
-    setFiles(prev => prev.map(file => 
-      file.id === id ? { ...file, selected: !file.selected } : file
-    ));
-  };
-
   return {
     files,
-    settings,
     consolidatedData,
+    chartData,
+    availableColumns,
+    settings,
     handleFileUpload,
+    handleConsolidateFiles,
+    handleDownloadConsolidated,
+    toggleFileSelection,
     removeFile,
-    clearAllFiles,
-    handleConsolidate,
-    handleDownload,
-    updateSettings,
-    toggleFileSelection
+    selectAllFiles,
+    updateSettings
   };
 }

@@ -1,167 +1,79 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Download, BarChart3, Table2 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { 
+  Table, 
+  TableBody, 
+  TableCell, 
+  TableHead, 
+  TableHeader, 
+  TableRow 
+} from "@/components/ui/table";
+import { 
+  BarChart as BarChartIcon, 
+  TableIcon, 
+  Download, 
+  Settings 
+} from "lucide-react";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 interface ConsolidatedPreviewProps {
   data: any[] | null;
+  chartData: any[] | null;
   onDownload: () => void;
 }
 
+// Функция для определения цветов баров графика
+const getBarColors = () => [
+  "#8B5CF6", // Purple
+  "#0EA5E9", // Blue
+  "#F97316", // Orange
+  "#10B981", // Green
+  "#F43F5E", // Red
+  "#6366F1", // Indigo
+  "#EC4899", // Pink
+  "#8B5CF6", // Purple
+  "#0284C7", // Light Blue
+  "#059669", // Emerald
+  "#D946EF", // Fuchsia
+  "#6D28D9", // Violet
+];
+
 /**
- * Компонент для отображения предварительного просмотра консолидированных данных
+ * Компонент для отображения результатов консолидации с таблицей и графиком
  */
-const ConsolidatedPreview = ({ data, onDownload }: ConsolidatedPreviewProps) => {
+const ConsolidatedPreview = ({ data, chartData, onDownload }: ConsolidatedPreviewProps) => {
   if (!data || data.length === 0) {
     return (
-      <Card>
-        <CardContent className="flex items-center justify-center p-6">
-          <div className="text-center">
-            <p className="text-muted-foreground">Нет данных для отображения</p>
-            <p className="text-sm text-muted-foreground mt-1">
-              Загрузите файлы и выполните сведение данных
-            </p>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="border border-dashed rounded-md p-8 text-center">
+        <Settings className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+        <h3 className="text-lg font-medium mb-2">Нет данных для отображения</h3>
+        <p className="text-muted-foreground">
+          Сначала сведите файлы для просмотра результата
+        </p>
+      </div>
     );
   }
 
-  // Получаем ключи (колонки) из первой строки
+  // Получаем заголовки столбцов из первой строки данных
   const columns = Object.keys(data[0]);
   
-  // Находим числовые колонки для графика
-  const numericColumns = columns.filter(col => 
-    typeof data[0][col] === 'number'
-  );
+  // Получаем метаданные для графика
+  const chartKeys = chartData && chartData.length > 0 
+    ? Object.keys(chartData[0]).filter(key => key !== 'name')
+    : [];
   
-  // Находим текстовые колонки для категорий
-  const textColumns = columns.filter(col => 
-    typeof data[0][col] === 'string' || typeof data[0][col] === 'boolean'
-  );
-  
-  // Простая визуализация данных в виде таблицы
-  const renderTable = () => (
-    <div className="border rounded-md">
-      <div className="p-3 bg-muted/50 font-medium flex items-center justify-between">
-        <span>Табличное представление</span>
-        <span className="text-sm text-muted-foreground">
-          Показано {Math.min(10, data.length)} из {data.length} строк
-        </span>
-      </div>
-      <div className="overflow-x-auto">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              {columns.map((column) => (
-                <TableHead key={column}>{column}</TableHead>
-              ))}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {data.slice(0, 10).map((row, rowIndex) => (
-              <TableRow key={rowIndex}>
-                {columns.map((column, colIndex) => (
-                  <TableCell key={`${rowIndex}-${colIndex}`}>
-                    {row[column] !== null && row[column] !== undefined 
-                      ? String(row[column]) 
-                      : '-'}
-                  </TableCell>
-                ))}
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
-      {data.length > 10 && (
-        <div className="p-2 text-sm text-center text-muted-foreground">
-          Скачайте файл для просмотра всех данных
-        </div>
-      )}
-    </div>
-  );
-
-  // Простая визуализация данных в виде ASCII-графика
-  const renderChart = () => {
-    if (numericColumns.length === 0 || textColumns.length === 0) {
-      return (
-        <div className="p-6 text-center">
-          <BarChart3 className="w-10 h-10 mx-auto text-muted-foreground mb-2" />
-          <p className="text-muted-foreground">
-            Недостаточно данных для построения графика
-          </p>
-          <p className="text-sm text-muted-foreground mt-1">
-            Требуются числовые и текстовые поля в данных
-          </p>
-        </div>
-      );
-    }
-
-    // Для простоты берем первую текстовую колонку как категорию и первую числовую для значений
-    const categoryColumn = textColumns[0];
-    const valueColumn = numericColumns[0];
-    
-    // Ограничиваем количество категорий для графика
-    const topCategories = [...new Set(data.map(item => item[categoryColumn]))].slice(0, 6);
-    
-    // Вычисляем максимальное значение для масштабирования
-    const maxValue = Math.max(...data
-      .filter(item => topCategories.includes(item[categoryColumn]))
-      .map(item => Number(item[valueColumn]) || 0)
-    );
-    
-    // Группируем данные по категориям
-    const chartData = topCategories.map(category => {
-      const categoryItems = data.filter(item => item[categoryColumn] === category);
-      const sum = categoryItems.reduce((acc, item) => acc + (Number(item[valueColumn]) || 0), 0);
-      return { category, value: sum };
-    }).sort((a, b) => b.value - a.value);
-    
-    return (
-      <div className="p-4 border rounded-md">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-medium">Визуализация данных</h3>
-          <div className="text-sm text-muted-foreground">
-            По полям: {categoryColumn} / {valueColumn}
-          </div>
-        </div>
-        
-        <div className="space-y-3">
-          {chartData.map(item => {
-            const percentage = Math.round((item.value / maxValue) * 100);
-            return (
-              <div key={item.category} className="space-y-1">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="font-medium truncate max-w-[200px]">
-                    {item.category}
-                  </span>
-                  <span>{item.value.toLocaleString()}</span>
-                </div>
-                <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
-                  <div 
-                    className="h-full bg-primary rounded-full transition-all"
-                    style={{ width: `${percentage}%` }}
-                  />
-                </div>
-              </div>
-            );
-          })}
-        </div>
-        
-        {topCategories.length < new Set(data.map(item => item[categoryColumn])).size && (
-          <div className="mt-4 text-xs text-center text-muted-foreground">
-            Показаны только топ-{topCategories.length} категорий
-          </div>
-        )}
-      </div>
-    );
-  };
+  const colors = getBarColors();
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between pb-2">
-        <CardTitle className="text-lg">Результат сведения</CardTitle>
+    <div className="space-y-4">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div>
+          <h3 className="text-lg font-medium">Результат сведения</h3>
+          <p className="text-sm text-muted-foreground">
+            Всего строк: {data.length}
+          </p>
+        </div>
         <Button 
           onClick={onDownload}
           className="flex items-center gap-2"
@@ -169,45 +81,107 @@ const ConsolidatedPreview = ({ data, onDownload }: ConsolidatedPreviewProps) => 
           <Download className="h-4 w-4" />
           Скачать Excel
         </Button>
-      </CardHeader>
-      <CardContent className="pt-0">
-        <div className="space-y-4">
-          <div className="grid grid-cols-3 gap-4">
-            <Card className="p-4 flex flex-col items-center">
-              <p className="text-muted-foreground text-sm mb-1">Строк данных</p>
-              <p className="text-2xl font-bold">{data.length}</p>
-            </Card>
-            <Card className="p-4 flex flex-col items-center">
-              <p className="text-muted-foreground text-sm mb-1">Столбцов</p>
-              <p className="text-2xl font-bold">{columns.length}</p>
-            </Card>
-            <Card className="p-4 flex flex-col items-center">
-              <p className="text-muted-foreground text-sm mb-1">Числовых полей</p>
-              <p className="text-2xl font-bold">{numericColumns.length}</p>
-            </Card>
+      </div>
+      
+      <Tabs defaultValue="table" className="w-full">
+        <TabsList>
+          <TabsTrigger value="table" className="flex items-center gap-2">
+            <TableIcon className="h-4 w-4" />
+            <span>Таблица</span>
+          </TabsTrigger>
+          <TabsTrigger 
+            value="chart" 
+            disabled={!chartData || chartData.length === 0}
+            className="flex items-center gap-2"
+          >
+            <BarChartIcon className="h-4 w-4" />
+            <span>График</span>
+          </TabsTrigger>
+        </TabsList>
+        
+        <TabsContent value="table" className="p-0">
+          <div className="border rounded-md">
+            <div className="p-3 bg-muted/50 font-medium flex items-center justify-between">
+              <span>Просмотр консолидированных данных</span>
+              <span className="text-sm text-muted-foreground">
+                {data.length > 10 
+                  ? `Показано 10 из ${data.length} строк` 
+                  : `Показано ${data.length} строк`
+                }
+              </span>
+            </div>
+            <ScrollArea className="h-[400px]">
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      {columns.map((column) => (
+                        <TableHead key={column}>{column}</TableHead>
+                      ))}
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {data.slice(0, 10).map((row, rowIndex) => (
+                      <TableRow key={rowIndex}>
+                        {columns.map((column, colIndex) => (
+                          <TableCell key={colIndex}>
+                            {row[column] !== null && row[column] !== undefined
+                              ? String(row[column])
+                              : ""}
+                          </TableCell>
+                        ))}
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </ScrollArea>
+            {data.length > 10 && (
+              <div className="p-2 text-sm text-center text-muted-foreground">
+                Скачайте файл для просмотра всех данных.
+              </div>
+            )}
           </div>
-          
-          <Tabs defaultValue="table">
-            <TabsList className="grid w-[400px] grid-cols-2">
-              <TabsTrigger value="table" className="flex items-center gap-2">
-                <Table2 className="w-4 h-4" />
-                Таблица
-              </TabsTrigger>
-              <TabsTrigger value="chart" className="flex items-center gap-2">
-                <BarChart3 className="w-4 h-4" />
-                График
-              </TabsTrigger>
-            </TabsList>
-            <TabsContent value="table" className="mt-4">
-              {renderTable()}
-            </TabsContent>
-            <TabsContent value="chart" className="mt-4">
-              {renderChart()}
-            </TabsContent>
-          </Tabs>
-        </div>
-      </CardContent>
-    </Card>
+        </TabsContent>
+        
+        <TabsContent value="chart">
+          {chartData && chartData.length > 0 && chartKeys.length > 0 ? (
+            <div className="border rounded-md">
+              <div className="p-3 bg-muted/50 font-medium">
+                <span>Визуализация сведенных данных</span>
+              </div>
+              <div className="p-4">
+                <ResponsiveContainer width="100%" height={400}>
+                  <BarChart data={chartData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="name" />
+                    <YAxis />
+                    <Tooltip />
+                    <Legend />
+                    {chartKeys.map((key, index) => (
+                      <Bar 
+                        key={key} 
+                        dataKey={key} 
+                        fill={colors[index % colors.length]} 
+                        name={key}
+                      />
+                    ))}
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          ) : (
+            <div className="border border-dashed rounded-md p-8 text-center">
+              <BarChartIcon className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+              <h3 className="text-lg font-medium mb-2">Нет данных для графика</h3>
+              <p className="text-muted-foreground">
+                Для построения графика необходимы сгруппированные числовые данные
+              </p>
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
+    </div>
   );
 };
 

@@ -1,14 +1,14 @@
 import { FileData } from "@/types/excel";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { FileSpreadsheet, Trash, AlertTriangle } from "lucide-react";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { FileSpreadsheet, Trash2, Database } from "lucide-react";
 
 interface FilesListProps {
   files: FileData[];
-  onToggleFileSelection: (id: string) => void;
+  onToggleSelection: (id: string) => void;
   onRemoveFile: (id: string) => void;
-  onClearAllFiles: () => void;
+  onSelectAll: (selected: boolean) => void;
 }
 
 /**
@@ -16,85 +16,83 @@ interface FilesListProps {
  */
 const FilesList = ({ 
   files, 
-  onToggleFileSelection, 
+  onToggleSelection, 
   onRemoveFile,
-  onClearAllFiles 
+  onSelectAll
 }: FilesListProps) => {
   if (files.length === 0) {
     return (
-      <Card className="bg-muted/30">
-        <CardContent className="flex items-center justify-center p-6">
-          <div className="text-center">
-            <AlertTriangle className="h-6 w-6 text-muted-foreground mx-auto mb-2" />
-            <p className="text-muted-foreground">Нет загруженных файлов</p>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="text-center py-6 text-muted-foreground">
+        <Database className="h-8 w-8 mx-auto mb-2" />
+        <p>Нет загруженных файлов</p>
+      </div>
     );
   }
 
+  const allSelected = files.every(file => file.selected);
+
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between pb-2">
-        <CardTitle className="text-lg">Загруженные файлы</CardTitle>
-        {files.length > 0 && (
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            onClick={onClearAllFiles}
-            className="text-destructive hover:text-destructive/90 hover:bg-destructive/10"
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center space-x-2">
+          <Checkbox 
+            id="select-all" 
+            checked={allSelected} 
+            onCheckedChange={(checked) => onSelectAll(!!checked)}
+          />
+          <label 
+            htmlFor="select-all" 
+            className="text-sm cursor-pointer"
           >
-            Очистить все
-          </Button>
-        )}
-      </CardHeader>
-      <CardContent className="pt-0">
-        <div className="space-y-3">
-          {files.map((file) => (
+            Выбрать все файлы
+          </label>
+        </div>
+        <span className="text-sm text-muted-foreground">
+          Всего файлов: {files.length}
+        </span>
+      </div>
+
+      <ScrollArea className="h-[240px] rounded-md border p-2">
+        <div className="space-y-2">
+          {files.map(file => (
             <div 
-              key={file.id} 
-              className="flex items-start justify-between p-3 border rounded-lg hover:bg-muted/30 transition-colors"
+              key={file.id}
+              className="flex items-center justify-between p-2 rounded-md hover:bg-muted group"
             >
-              <div className="flex items-start gap-3">
+              <div className="flex items-center gap-3">
                 <Checkbox 
                   id={`file-${file.id}`}
                   checked={file.selected}
-                  onCheckedChange={() => onToggleFileSelection(file.id)}
-                  className="mt-1"
+                  onCheckedChange={() => onToggleSelection(file.id)}
                 />
-                <div className="flex items-start gap-2">
-                  <FileSpreadsheet className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
-                  <div>
-                    <label 
-                      htmlFor={`file-${file.id}`} 
-                      className="font-medium text-sm cursor-pointer hover:underline"
-                    >
-                      {file.name}
-                    </label>
-                    <div className="text-xs text-muted-foreground">
-                      <span>{file.columns.length} столбцов</span>
-                      <span className="mx-1">•</span>
-                      <span>{file.data.length} строк</span>
-                    </div>
-                    <div className="text-xs text-muted-foreground mt-1 max-w-[300px] truncate">
-                      Столбцы: {file.columns.join(', ')}
-                    </div>
+                <FileSpreadsheet className="h-5 w-5 text-green-600 shrink-0" />
+                <div className="min-w-0">
+                  <label
+                    htmlFor={`file-${file.id}`}
+                    className="block font-medium text-sm truncate cursor-pointer"
+                    title={file.name}
+                  >
+                    {file.name}
+                  </label>
+                  <div className="text-xs text-muted-foreground">
+                    {file.columns.length} столбцов, {file.data.length} строк
                   </div>
                 </div>
               </div>
-              <Button 
-                variant="ghost" 
-                size="icon" 
+              
+              <Button
+                variant="ghost"
+                size="icon"
                 onClick={() => onRemoveFile(file.id)}
-                className="text-destructive hover:text-destructive/90 hover:bg-destructive/10"
+                className="opacity-0 group-hover:opacity-100 transition-opacity h-8 w-8"
               >
-                <Trash className="h-4 w-4" />
+                <Trash2 className="h-4 w-4 text-destructive" />
               </Button>
             </div>
           ))}
         </div>
-      </CardContent>
-    </Card>
+      </ScrollArea>
+    </div>
   );
 };
 
