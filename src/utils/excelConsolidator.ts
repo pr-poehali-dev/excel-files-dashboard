@@ -1,11 +1,11 @@
 import { FileData, ConsolidationSettings } from "@/types/excel";
 
 /**
- * Функция для сведения данных из нескольких Excel-файлов
+ * Консолидирует (сводит) данные из выбранных файлов согласно указанным настройкам
  * 
- * @param files - Массив файлов для сведения
- * @param settings - Настройки сведения
- * @returns Сведенные данные или null в случае ошибки
+ * @param files Массив выбранных файлов для сведения
+ * @param settings Настройки сведения
+ * @returns Сведенный набор данных или null в случае ошибки
  */
 export const consolidateExcelFiles = (
   files: FileData[],
@@ -15,224 +15,297 @@ export const consolidateExcelFiles = (
     return null;
   }
 
-  try {
-    switch (settings.consolidationType) {
-      case "append":
-        return appendData(files, settings);
-      case "summary":
-        return createSummary(files, settings);
-      case "pivot":
-        return createPivot(files, settings);
-      default:
-        return null;
-    }
-  } catch (error) {
-    console.error("Ошибка при сведении файлов:", error);
-    return null;
+  switch (settings.consolidationType) {
+    case "append":
+      return appendConsolidation(files, settings);
+    case "summary":
+      return summaryConsolidation(files, settings);
+    case "pivot":
+      return pivotConsolidation(files, settings);
+    default:
+      return null;
   }
 };
 
 /**
- * Объединение данных из файлов путем добавления всех строк
+ * Простое добавление данных из всех файлов в один список
  */
-const appendData = (files: FileData[], settings: ConsolidationSettings): any[] => {
-  // Получаем все уникальные столбцы из всех файлов
-  const allColumns = new Set<string>();
-  files.forEach(file => {
-    file.columns.forEach(column => allColumns.add(column));
-  });
-
-  const result: any[] = [];
-
-  files.forEach(file => {
-    file.data.forEach(row => {
-      // Пропускаем пустые строки, если настройка включена
-      if (settings.skipEmptyRows && isEmptyRow(row)) {
-        return;
-      }
-
-      const newRow: any = {};
+const appendConsolidation = (
+  files: FileData[],
+  settings: ConsolidationSettings
+): any[] => {
+  let result: any[] = [];
+  
+  for (const file of files) {
+    // Фильтруем пустые строки, если это настроено
+    const fileData = settings.skipEmptyRows 
+      ? file.data.filter(row => Object.values(row).some(val => val !== null && val !== undefined && val !== ''))
+      : file.data;
       
-      // Заполняем все возможные столбцы
-      allColumns.forEach(column => {
-        // Если нужно сохранять заголовки, добавляем имя файла к имени столбца
-        if (settings.preserveHeaders && column in row) {
-          const columnName = `${column} (${file.name})`;
-          newRow[columnName] = row[column];
-        } else {
-          newRow[column] = column in row ? row[column] : null;
-        }
+    // Добавляем информацию об источнике файла, если не сохраняем заголовки
+    if (!settings.preserveHeaders) {
+      fileData.forEach(row => {
+        row["Файл-источник"] = file.name;
       });
-      
-      result.push(newRow);
-    });
-  });
-
+    }
+    
+    result = result.concat(fileData);
+  }
+  
   return result;
 };
 
 /**
- * Создание сводной таблицы с итогами по файлам
+ * Создание сводной таблицы с суммированием/усреднением значений
  */
-const createSummary = (files: FileData[], settings: ConsolidationSettings): any[] => {
-  // Находим числовые столбцы для агрегации
-  const numericColumns: Record<string, boolean> = {};
-  const firstFileWithData = files.find(f => f.data.length > 0);
-  
-  if (!firstFileWithData) return [];
-  
-  // Определяем числовые столбцы на основе первого файла
-  Object.keys(firstFileWithData.data[0]).forEach(column => {
-    const value = firstFileWithData.data[0][column];
-    if (typeof value === 'number' || !isNaN(parseFloat(value))) {
-      numericColumns[column] = true;
-    }
+const summaryConsolidation = (
+  files: FileData[],
+  settings: ConsolidationSettings
+): any[] => {
+  // Собираем все возможные колонки из всех файлов
+  const allColumns = new Set<string>();
+  files.forEach(file => {
+    file.columns.forEach(col => allColumns.add(col));
   });
   
-  // Создаем сводную таблицу
-  const summary: any[] = [];
+  // Находим числовые и текстовые колонки для агрегации
+  const numericColumns: string[] = [];
+  const textColumns: string[] = [];
+  
+  // Предполагаем, что первый файл репрезентативен для определения типов колонок
+  if (files.length > 0 && files[0].data.length > 0) {
+    const sampleRow = files[0].data[0];
+    
+    for (const col of allColumns) {
+      if (col in sampleRow) {
+        if (typeof sampleRow[col] === 'number') {
+          numericColumns.push(col);
+        } else {
+          textColumns.push(col);
+        }
+      }
+    }
+  }
+  
+  // Создаем сводную таблицу по текстовым колонкам
+  const summary: Record<string, any> = {};
   
   files.forEach(file => {
-    const fileStats: any = {
-      "Файл": file.name,
-      "Количество строк": file.data.length
-    };
-    
-    // Агрегируем числовые данные
-    Object.keys(numericColumns).forEach(column => {
-      const values = file.data
-        .map(row => typeof row[column] === 'number' ? row[column] : parseFloat(row[column]))
-        .filter(val => !isNaN(val));
-      
-      if (values.length === 0) {
-        fileStats[`${column} (${settings.aggregationFunction})`] = 0;
+    file.data.forEach(row => {
+      // Пропускаем пустые строки, если настроено
+      if (settings.skipEmptyRows && 
+          Object.values(row).every(val => val === null || val === undefined || val === '')) {
         return;
       }
       
-      let aggregatedValue: number;
+      // Создаем ключ группировки из текстовых колонок
+      const groupKey = textColumns
+        .map(col => row[col] || "Не указано")
+        .join("_");
       
-      switch (settings.aggregationFunction) {
-        case "sum":
-          aggregatedValue = values.reduce((sum, val) => sum + val, 0);
-          break;
-        case "average":
-          aggregatedValue = values.reduce((sum, val) => sum + val, 0) / values.length;
-          break;
-        case "count":
-          aggregatedValue = values.length;
-          break;
-        case "min":
-          aggregatedValue = Math.min(...values);
-          break;
-        case "max":
-          aggregatedValue = Math.max(...values);
-          break;
-        default:
-          aggregatedValue = 0;
+      if (!summary[groupKey]) {
+        const summaryRow: Record<string, any> = {};
+        
+        // Копируем текстовые значения
+        textColumns.forEach(col => {
+          summaryRow[col] = row[col] || "Не указано";
+        });
+        
+        // Инициализируем числовые значения
+        numericColumns.forEach(col => {
+          summaryRow[col] = 0;
+          summaryRow[`_count_${col}`] = 0; // Для подсчета среднего
+        });
+        
+        summary[groupKey] = summaryRow;
       }
       
-      fileStats[`${column} (${settings.aggregationFunction})`] = aggregatedValue;
-    });
-    
-    summary.push(fileStats);
-  });
-  
-  return summary;
-};
-
-/**
- * Создание сводной таблицы с группировкой (pivot)
- */
-const createPivot = (files: FileData[], settings: ConsolidationSettings): any[] => {
-  // Упрощенная реализация сводной таблицы для демонстрации
-  // В реальном приложении здесь была бы более сложная логика создания pivot table
-  
-  // Находим все категориальные столбцы (тип string)
-  const categories = new Set<string>();
-  const metrics = new Set<string>();
-  
-  // Определяем категории и метрики
-  files.forEach(file => {
-    if (file.data.length === 0) return;
-    
-    Object.entries(file.data[0]).forEach(([key, value]) => {
-      if (typeof value === 'string' && !isNumeric(value)) {
-        categories.add(key);
-      } else {
-        metrics.add(key);
-      }
+      // Агрегируем числовые значения
+      numericColumns.forEach(col => {
+        if (row[col] !== null && row[col] !== undefined && !isNaN(Number(row[col]))) {
+          const value = Number(row[col]);
+          
+          if (settings.aggregationFunction === "sum" || settings.aggregationFunction === "average") {
+            summary[groupKey][col] += value;
+            summary[groupKey][`_count_${col}`] += 1;
+          } else if (settings.aggregationFunction === "max") {
+            summary[groupKey][col] = Math.max(summary[groupKey][col], value);
+          } else if (settings.aggregationFunction === "min") {
+            if (summary[groupKey][`_count_${col}`] === 0) {
+              summary[groupKey][col] = value;
+            } else {
+              summary[groupKey][col] = Math.min(summary[groupKey][col], value);
+            }
+            summary[groupKey][`_count_${col}`] += 1;
+          }
+        }
+      });
     });
   });
   
-  // Берем первые две категории для группировки
-  const categoryColumns = Array.from(categories).slice(0, 2);
-  const metricColumns = Array.from(metrics).slice(0, 3);
+  // Преобразуем результат в массив и финализируем вычисления
+  const result = Object.values(summary);
   
-  if (categoryColumns.length === 0 || metricColumns.length === 0) {
-    return createSummary(files, settings);
+  if (settings.aggregationFunction === "average") {
+    result.forEach(row => {
+      numericColumns.forEach(col => {
+        if (row[`_count_${col}`] > 0) {
+          row[col] = row[col] / row[`_count_${col}`];
+        }
+        delete row[`_count_${col}`];
+      });
+    });
+  } else {
+    // Удаляем служебные поля счетчиков
+    result.forEach(row => {
+      numericColumns.forEach(col => {
+        delete row[`_count_${col}`];
+      });
+    });
   }
   
-  // Объединяем все данные
-  const allData = files.flatMap(file => file.data);
+  return result;
+};
+
+/**
+ * Создание сводной таблицы с данными по столбцам
+ */
+const pivotConsolidation = (
+  files: FileData[],
+  settings: ConsolidationSettings
+): any[] => {
+  // Упрощенная реализация сводной таблицы
+  // В реальном проекте этот метод был бы более сложным и настраиваемым
   
-  // Группируем по первой категории
-  const groupedData: Record<string, any[]> = {};
+  if (files.length === 0 || files[0].columns.length < 2) {
+    return [];
+  }
   
-  allData.forEach(row => {
-    const categoryValue = String(row[categoryColumns[0]] || 'Прочее');
-    
-    if (!groupedData[categoryValue]) {
-      groupedData[categoryValue] = [];
+  // Для демонстрации берем первые две колонки как строки и столбцы сводной таблицы
+  const rowField = files[0].columns[0];
+  const colField = files[0].columns[1];
+  let valueField = files[0].columns[2];
+  
+  // Если есть числовое поле, используем его для значений
+  for (const col of files[0].columns) {
+    if (files[0].data.length > 0 && typeof files[0].data[0][col] === 'number') {
+      valueField = col;
+      break;
     }
-    
-    groupedData[categoryValue].push(row);
+  }
+  
+  // Собираем уникальные значения для строк и столбцов
+  const rowValues = new Set<string>();
+  const colValues = new Set<string>();
+  
+  files.forEach(file => {
+    file.data.forEach(row => {
+      if (row[rowField]) rowValues.add(String(row[rowField]));
+      if (row[colField]) colValues.add(String(row[colField]));
+    });
   });
   
-  // Создаем сводку для каждой группы
-  const pivotResult: any[] = [];
+  // Создаем сводную таблицу
+  const result: any[] = [];
   
-  Object.entries(groupedData).forEach(([category, rows]) => {
-    const pivotRow: any = {
-      [categoryColumns[0]]: category,
-      "Количество": rows.length
+  rowValues.forEach(rowVal => {
+    const newRow: Record<string, any> = {
+      [rowField]: rowVal
     };
     
-    // Добавляем агрегированные метрики
-    metricColumns.forEach(metric => {
-      const values = rows
-        .map(row => {
-          const val = row[metric];
-          return typeof val === 'number' ? val : parseFloat(val);
-        })
-        .filter(val => !isNaN(val));
+    colValues.forEach(colVal => {
+      newRow[colVal] = 0;
+      let count = 0;
       
-      if (values.length > 0) {
-        pivotRow[`${metric} (сумма)`] = values.reduce((sum, val) => sum + val, 0);
-        pivotRow[`${metric} (среднее)`] = values.reduce((sum, val) => sum + val, 0) / values.length;
-      } else {
-        pivotRow[`${metric} (сумма)`] = 0;
-        pivotRow[`${metric} (среднее)`] = 0;
+      files.forEach(file => {
+        file.data.forEach(row => {
+          if (String(row[rowField]) === rowVal && String(row[colField]) === colVal) {
+            const value = Number(row[valueField]) || 0;
+            
+            if (settings.aggregationFunction === "sum" || settings.aggregationFunction === "average") {
+              newRow[colVal] += value;
+              count++;
+            } else if (settings.aggregationFunction === "max") {
+              newRow[colVal] = Math.max(newRow[colVal], value);
+            } else if (settings.aggregationFunction === "min") {
+              if (count === 0) {
+                newRow[colVal] = value;
+              } else {
+                newRow[colVal] = Math.min(newRow[colVal], value);
+              }
+              count++;
+            }
+          }
+        });
+      });
+      
+      if (settings.aggregationFunction === "average" && count > 0) {
+        newRow[colVal] /= count;
       }
     });
     
-    pivotResult.push(pivotRow);
+    result.push(newRow);
   });
   
-  return pivotResult;
+  return result;
 };
 
 /**
- * Проверка, является ли строка пустой (все значения null, undefined или пустые строки)
+ * Функция для преобразования и сохранения данных в Excel-файл
+ * 
+ * @param data Данные для сохранения
+ * @param fileName Имя файла
  */
-const isEmptyRow = (row: any): boolean => {
-  return Object.values(row).every(
-    value => value === null || value === undefined || value === ''
-  );
+export const downloadAsExcel = (data: any[], fileName: string): void => {
+  // В реальной реализации здесь была бы логика сохранения Excel-файла
+  console.log('Данные для сохранения:', data);
+  console.log(`Файл будет сохранен как ${fileName}`);
 };
 
 /**
- * Проверка, является ли строка числовым значением
+ * Имитация чтения данных из Excel-файла
+ * 
+ * @param file Файл для чтения
+ * @returns Объект с данными и метаданными файла
  */
-const isNumeric = (value: any): boolean => {
-  return !isNaN(parseFloat(value)) && isFinite(value);
+export const readExcelFile = async (file: File): Promise<Omit<FileData, 'id' | 'selected'>> => {
+  // Имитация асинхронного чтения файла
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      // Генерируем случайные тестовые данные для разных типов файлов
+      let mockData: any[] = [];
+      
+      if (file.name.includes("продажи") || file.name.includes("sales")) {
+        mockData = [
+          { "Регион": "Москва", "Продукт": "Телефоны", "Продажи": 120000, "Месяц": "Январь" },
+          { "Регион": "Москва", "Продукт": "Ноутбуки", "Продажи": 230000, "Месяц": "Январь" },
+          { "Регион": "Санкт-Петербург", "Продукт": "Телефоны", "Продажи": 95000, "Месяц": "Январь" },
+          { "Регион": "Санкт-Петербург", "Продукт": "Ноутбуки", "Продажи": 180000, "Месяц": "Январь" },
+          { "Регион": "Москва", "Продукт": "Телефоны", "Продажи": 135000, "Месяц": "Февраль" },
+          { "Регион": "Москва", "Продукт": "Ноутбуки", "Продажи": 210000, "Месяц": "Февраль" }
+        ];
+      } else if (file.name.includes("персонал") || file.name.includes("staff")) {
+        mockData = [
+          { "Отдел": "Продажи", "Сотрудник": "Иванов", "Зарплата": 70000, "Стаж": 3 },
+          { "Отдел": "Продажи", "Сотрудник": "Петров", "Зарплата": 65000, "Стаж": 2 },
+          { "Отдел": "Маркетинг", "Сотрудник": "Сидорова", "Зарплата": 80000, "Стаж": 5 },
+          { "Отдел": "Маркетинг", "Сотрудник": "Козлова", "Зарплата": 75000, "Стаж": 4 },
+          { "Отдел": "ИТ", "Сотрудник": "Смирнов", "Зарплата": 120000, "Стаж": 7 }
+        ];
+      } else {
+        mockData = [
+          { "Категория": "Категория A", "Значение": 42, "Группа": "Группа 1" },
+          { "Категория": "Категория B", "Значение": 28, "Группа": "Группа 1" },
+          { "Категория": "Категория A", "Значение": 35, "Группа": "Группа 2" },
+          { "Категория": "Категория B", "Значение": 16, "Группа": "Группа 2" }
+        ];
+      }
+      
+      resolve({
+        name: file.name,
+        data: mockData,
+        columns: Object.keys(mockData[0] || {})
+      });
+    }, 100);
+  });
 };

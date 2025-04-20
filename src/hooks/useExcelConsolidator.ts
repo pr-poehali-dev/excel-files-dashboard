@@ -1,8 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect } from 'react';
 import { useToast } from "@/components/ui/use-toast";
-import { FileData, ConsolidationSettings } from "@/types/excel";
-import { readExcelFile } from "@/utils/excelMerger";
-import { consolidateExcelFiles } from "@/utils/excelConsolidator";
+import { FileData, ConsolidationSettings } from '@/types/excel';
+import { 
+  consolidateExcelFiles, 
+  downloadAsExcel, 
+  readExcelFile 
+} from '@/utils/excelConsolidator';
 
 /**
  * Хук для управления логикой сведения Excel-файлов
@@ -10,7 +13,6 @@ import { consolidateExcelFiles } from "@/utils/excelConsolidator";
 export function useExcelConsolidator() {
   const [files, setFiles] = useState<FileData[]>([]);
   const [consolidatedData, setConsolidatedData] = useState<any[] | null>(null);
-  const [isProcessing, setIsProcessing] = useState(false);
   const [settings, setSettings] = useState<ConsolidationSettings>({
     consolidationType: "append",
     preserveHeaders: true,
@@ -23,30 +25,32 @@ export function useExcelConsolidator() {
   /**
    * Обработчик загрузки файлов
    */
-  const handleFilesUpload = async (fileList: FileList) => {
-    if (fileList.length === 0) return;
+  const handleFileUpload = async (uploadedFiles: File[]) => {
+    if (!uploadedFiles.length) return;
     
-    setIsProcessing(true);
+    const newFiles: FileData[] = [];
     
     try {
-      const filesArray = Array.from(fileList);
-      const newFiles: FileData[] = [];
-      
-      for (const file of filesArray) {
+      for (const file of uploadedFiles) {
         try {
           const fileData = await readExcelFile(file);
           
           newFiles.push({
             id: crypto.randomUUID(),
-            name: file.name,
+            name: fileData.name,
             data: fileData.data,
             columns: fileData.columns,
             selected: true
           });
+          
+          toast({
+            title: "Файл загружен",
+            description: `Файл "${file.name}" успешно загружен`,
+          });
         } catch (error) {
           toast({
-            title: "Ошибка чтения файла",
-            description: `Не удалось прочитать файл "${file.name}". Проверьте формат.`,
+            title: "Ошибка",
+            description: `Не удалось прочитать файл "${file.name}". Проверьте формат Excel.`,
             variant: "destructive",
           });
         }
@@ -54,45 +58,53 @@ export function useExcelConsolidator() {
       
       if (newFiles.length > 0) {
         setFiles(prev => [...prev, ...newFiles]);
-        
-        toast({
-          title: "Файлы загружены",
-          description: `Успешно загружено файлов: ${newFiles.length}`,
-        });
       }
     } catch (error) {
       toast({
         title: "Ошибка",
-        description: "Произошла ошибка при обработке файлов",
+        description: "Произошла непредвиденная ошибка при обработке файлов",
         variant: "destructive",
       });
-    } finally {
-      setIsProcessing(false);
     }
   };
 
   /**
-   * Создание сводной таблицы из загруженных файлов
+   * Обработчик удаления файла
+   */
+  const removeFile = (id: string) => {
+    setFiles(prev => prev.filter(file => file.id !== id));
+  };
+
+  /**
+   * Обработчик очистки всех файлов
+   */
+  const clearAllFiles = () => {
+    setFiles([]);
+    setConsolidatedData(null);
+  };
+
+  /**
+   * Обработчик консолидации файлов
    */
   const handleConsolidate = () => {
-    if (files.length === 0) {
+    const selectedFiles = files.filter(file => file.selected);
+    
+    if (selectedFiles.length < 1) {
       toast({
-        title: "Нет файлов",
+        title: "Нет файлов для сведения",
         description: "Загрузите хотя бы один файл для сведения",
         variant: "destructive",
       });
       return;
     }
     
-    setIsProcessing(true);
-    
     try {
-      const result = consolidateExcelFiles(files, settings);
+      const result = consolidateExcelFiles(selectedFiles, settings);
       
       if (!result || result.length === 0) {
         toast({
           title: "Ошибка сведения",
-          description: "Не удалось создать сводную таблицу из загруженных файлов",
+          description: "Не удалось свести данные. Проверьте файлы и настройки.",
           variant: "destructive",
         });
         return;
@@ -101,41 +113,30 @@ export function useExcelConsolidator() {
       setConsolidatedData(result);
       
       toast({
-        title: "Сведение завершено",
-        description: `Создана сводная таблица с ${result.length} строками`,
+        title: "Данные сведены",
+        description: `Успешно обработано ${selectedFiles.length} файлов`,
       });
     } catch (error) {
       toast({
-        title: "Ошибка",
-        description: "Произошла ошибка при создании сводной таблицы",
+        title: "Ошибка сведения",
+        description: "Произошла ошибка при сведении данных",
         variant: "destructive",
       });
-    } finally {
-      setIsProcessing(false);
     }
   };
 
   /**
-   * Удаление файла из списка
+   * Обработчик скачивания сведенного файла
    */
-  const handleRemoveFile = (id: string) => {
-    setFiles(files.filter(file => file.id !== id));
-    
-    // Сбрасываем результат, если удаляем файл
-    setConsolidatedData(null);
-  };
-
-  /**
-   * Скачивание результата сведения
-   */
-  const handleDownloadResult = () => {
+  const handleDownload = () => {
     if (!consolidatedData) return;
     
     try {
-      // Имитация скачивания файла
+      downloadAsExcel(consolidatedData, 'consolidated_data.xlsx');
+      
       toast({
-        title: "Загрузка файла",
-        description: "Файл со сводной таблицей сохранен",
+        title: "Файл сохранен",
+        description: "Сведенный файл успешно скачан",
       });
     } catch (error) {
       toast({
@@ -149,19 +150,29 @@ export function useExcelConsolidator() {
   /**
    * Обновление настроек сведения
    */
-  const updateSettings = (updatedSettings: Partial<ConsolidationSettings>) => {
-    setSettings({ ...settings, ...updatedSettings });
+  const updateSettings = (newSettings: Partial<ConsolidationSettings>) => {
+    setSettings(prev => ({ ...prev, ...newSettings }));
+  };
+
+  /**
+   * Переключение выбора файла
+   */
+  const toggleFileSelection = (id: string) => {
+    setFiles(prev => prev.map(file => 
+      file.id === id ? { ...file, selected: !file.selected } : file
+    ));
   };
 
   return {
     files,
-    consolidatedData,
     settings,
-    isProcessing,
-    handleFilesUpload,
+    consolidatedData,
+    handleFileUpload,
+    removeFile,
+    clearAllFiles,
     handleConsolidate,
-    handleRemoveFile,
-    handleDownloadResult,
+    handleDownload,
     updateSettings,
+    toggleFileSelection
   };
 }

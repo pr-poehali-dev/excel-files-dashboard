@@ -1,99 +1,100 @@
 import { FileData } from "@/types/excel";
-import { 
-  Card, 
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle
-} from "@/components/ui/card";
-import { FileSpreadsheet, Trash2, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { 
-  HoverCard,
-  HoverCardContent,
-  HoverCardTrigger 
-} from "@/components/ui/hover-card";
-import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import { FileSpreadsheet, Trash, AlertTriangle } from "lucide-react";
 
 interface FilesListProps {
   files: FileData[];
+  onToggleFileSelection: (id: string) => void;
   onRemoveFile: (id: string) => void;
+  onClearAllFiles: () => void;
 }
 
 /**
  * Компонент для отображения списка загруженных файлов
  */
-const FilesList = ({ files, onRemoveFile }: FilesListProps) => {
+const FilesList = ({ 
+  files, 
+  onToggleFileSelection, 
+  onRemoveFile,
+  onClearAllFiles 
+}: FilesListProps) => {
   if (files.length === 0) {
     return (
-      <Card className="border-dashed border">
-        <CardContent className="p-6 text-center">
-          <p className="text-muted-foreground">Нет загруженных файлов</p>
+      <Card className="bg-muted/30">
+        <CardContent className="flex items-center justify-center p-6">
+          <div className="text-center">
+            <AlertTriangle className="h-6 w-6 text-muted-foreground mx-auto mb-2" />
+            <p className="text-muted-foreground">Нет загруженных файлов</p>
+          </div>
         </CardContent>
       </Card>
     );
   }
 
   return (
-    <div>
-      <h3 className="text-lg font-medium mb-4">Загруженные файлы ({files.length})</h3>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {files.map((file) => (
-          <Card key={file.id} className="overflow-hidden">
-            <CardHeader className="pb-2">
-              <div className="flex justify-between items-start">
-                <div className="flex items-start space-x-2">
-                  <FileSpreadsheet className="h-5 w-5 mt-1 text-green-600 flex-shrink-0" />
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between pb-2">
+        <CardTitle className="text-lg">Загруженные файлы</CardTitle>
+        {files.length > 0 && (
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={onClearAllFiles}
+            className="text-destructive hover:text-destructive/90 hover:bg-destructive/10"
+          >
+            Очистить все
+          </Button>
+        )}
+      </CardHeader>
+      <CardContent className="pt-0">
+        <div className="space-y-3">
+          {files.map((file) => (
+            <div 
+              key={file.id} 
+              className="flex items-start justify-between p-3 border rounded-lg hover:bg-muted/30 transition-colors"
+            >
+              <div className="flex items-start gap-3">
+                <Checkbox 
+                  id={`file-${file.id}`}
+                  checked={file.selected}
+                  onCheckedChange={() => onToggleFileSelection(file.id)}
+                  className="mt-1"
+                />
+                <div className="flex items-start gap-2">
+                  <FileSpreadsheet className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
                   <div>
-                    <CardTitle className="text-base truncate max-w-[180px]">{file.name}</CardTitle>
-                    <CardDescription className="text-xs">
-                      {file.data.length} строк · {file.columns.length} столбцов
-                    </CardDescription>
+                    <label 
+                      htmlFor={`file-${file.id}`} 
+                      className="font-medium text-sm cursor-pointer hover:underline"
+                    >
+                      {file.name}
+                    </label>
+                    <div className="text-xs text-muted-foreground">
+                      <span>{file.columns.length} столбцов</span>
+                      <span className="mx-1">•</span>
+                      <span>{file.data.length} строк</span>
+                    </div>
+                    <div className="text-xs text-muted-foreground mt-1 max-w-[300px] truncate">
+                      Столбцы: {file.columns.join(', ')}
+                    </div>
                   </div>
                 </div>
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  className="h-8 w-8 p-0"
-                  onClick={() => onRemoveFile(file.id)}
-                >
-                  <Trash2 className="h-4 w-4 text-destructive" />
-                </Button>
               </div>
-            </CardHeader>
-            <CardContent className="pb-4">
-              <div className="flex flex-wrap gap-1 mb-2">
-                {file.columns.slice(0, 3).map((column, index) => (
-                  <Badge key={index} variant="outline" className="text-xs truncate max-w-[120px]">
-                    {column}
-                  </Badge>
-                ))}
-                {file.columns.length > 3 && (
-                  <HoverCard>
-                    <HoverCardTrigger asChild>
-                      <Badge variant="secondary" className="text-xs cursor-help">
-                        <Info className="h-3 w-3 mr-1" />
-                        +{file.columns.length - 3}
-                      </Badge>
-                    </HoverCardTrigger>
-                    <HoverCardContent className="w-64 p-2">
-                      <p className="text-sm font-medium mb-2">Все столбцы:</p>
-                      <div className="grid grid-cols-2 gap-1">
-                        {file.columns.map((column, index) => (
-                          <span key={index} className="text-xs truncate">
-                            • {column}
-                          </span>
-                        ))}
-                      </div>
-                    </HoverCardContent>
-                  </HoverCard>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-    </div>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                onClick={() => onRemoveFile(file.id)}
+                className="text-destructive hover:text-destructive/90 hover:bg-destructive/10"
+              >
+                <Trash className="h-4 w-4" />
+              </Button>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
   );
 };
 
