@@ -1,7 +1,7 @@
-import { ConsolidationSettings } from "@/types/excel";
+import { ConsolidationSettings as SettingsType } from "@/types/excel";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { 
   Select,
   SelectContent,
@@ -9,25 +9,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { 
-  Accordion,
-  AccordionContent, 
-  AccordionItem, 
-  AccordionTrigger 
-} from "@/components/ui/accordion";
-import { 
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow
-} from "@/components/ui/table";
-import { AlertCircle, Settings2 } from "lucide-react";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { InfoIcon } from "lucide-react";
 
 interface ConsolidationSettingsProps {
-  settings: ConsolidationSettings;
-  onUpdateSettings: (settings: Partial<ConsolidationSettings>) => void;
+  settings: SettingsType;
+  onUpdateSettings: (settings: Partial<SettingsType>) => void;
   availableColumns: string[];
   filesExist: boolean;
 }
@@ -35,14 +23,13 @@ interface ConsolidationSettingsProps {
 /**
  * Компонент настроек консолидации файлов
  */
-const ConsolidationSettingsComponent = ({ 
+const ConsolidationSettings = ({ 
   settings, 
   onUpdateSettings, 
   availableColumns,
   filesExist 
 }: ConsolidationSettingsProps) => {
   
-  // Выбор нескольких столбцов для значений
   const handleValueColumnToggle = (column: string) => {
     const newValueColumns = settings.valueColumns.includes(column)
       ? settings.valueColumns.filter(col => col !== column)
@@ -52,58 +39,109 @@ const ConsolidationSettingsComponent = ({
   };
   
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {!filesExist && (
         <Alert>
-          <AlertCircle className="h-4 w-4" />
+          <InfoIcon className="h-4 w-4" />
           <AlertTitle>Нет файлов</AlertTitle>
           <AlertDescription>
-            Загрузите Excel файлы для настройки параметров консолидации
+            Загрузите файлы для настройки параметров консолидации
           </AlertDescription>
         </Alert>
       )}
       
-      <div className="space-y-3">
-        <div className="space-y-1.5">
-          <Label htmlFor="consolidation-type">Тип консолидации</Label>
-          <Select
-            disabled={!filesExist}
-            value={settings.consolidationType}
-            onValueChange={(value: "append" | "summary" | "pivot") => 
-              onUpdateSettings({ consolidationType: value })
-            }
-          >
-            <SelectTrigger id="consolidation-type">
-              <SelectValue placeholder="Выберите тип консолидации" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="append">Простое объединение</SelectItem>
-              <SelectItem value="summary">Сводка по группам</SelectItem>
-              <SelectItem value="pivot">Сводная таблица</SelectItem>
-            </SelectContent>
-          </Select>
-          <p className="text-xs text-muted-foreground">
-            {settings.consolidationType === "append" && 
-              "Все данные будут просто объединены в одну таблицу"}
-            {settings.consolidationType === "summary" && 
-              "Данные будут сгруппированы по выбранному столбцу с применением агрегирующей функции"}
-            {settings.consolidationType === "pivot" && 
-              "Будет создана сводная таблица с группировкой по выбранному столбцу"}
-          </p>
+      <div className="space-y-4">
+        <h3 className="text-lg font-medium">Тип консолидации</h3>
+        
+        <RadioGroup 
+          value={settings.consolidationType}
+          onValueChange={(value: 'append' | 'summary' | 'pivot') => 
+            onUpdateSettings({ consolidationType: value })
+          }
+          className="grid grid-cols-1 gap-4 sm:grid-cols-3"
+        >
+          <div className="flex items-center space-x-2">
+            <RadioGroupItem value="append" id="append" />
+            <Label htmlFor="append" className="cursor-pointer">
+              Объединение данных
+            </Label>
+          </div>
+          
+          <div className="flex items-center space-x-2">
+            <RadioGroupItem value="summary" id="summary" />
+            <Label htmlFor="summary" className="cursor-pointer">
+              Сводка по группам
+            </Label>
+          </div>
+          
+          <div className="flex items-center space-x-2">
+            <RadioGroupItem value="pivot" id="pivot" />
+            <Label htmlFor="pivot" className="cursor-pointer">
+              Сводная таблица
+            </Label>
+          </div>
+        </RadioGroup>
+        
+        <div className="text-sm text-muted-foreground">
+          {settings.consolidationType === "append" && (
+            "Объединение добавляет все строки из выбранных файлов в один общий набор данных."
+          )}
+          {settings.consolidationType === "summary" && (
+            "Сводка группирует данные по выбранному столбцу и применяет выбранную функцию агрегации."
+          )}
+          {settings.consolidationType === "pivot" && (
+            "Сводная таблица создает таблицу с группировкой по строкам и отдельными столбцами для каждого файла."
+          )}
         </div>
-
-        {(settings.consolidationType === "summary" || settings.consolidationType === "pivot") && (
-          <>
-            <div className="space-y-1.5">
-              <Label htmlFor="group-by-column">Столбец для группировки</Label>
+      </div>
+      
+      {settings.consolidationType === "append" && (
+        <div className="space-y-4">
+          <h3 className="text-lg font-medium">Настройки объединения</h3>
+          
+          <div className="flex items-center space-x-2">
+            <Checkbox 
+              id="preserveHeaders"
+              checked={settings.preserveHeaders}
+              onCheckedChange={(checked) => 
+                onUpdateSettings({ preserveHeaders: !!checked })
+              }
+            />
+            <Label htmlFor="preserveHeaders" className="cursor-pointer">
+              Добавлять исходный файл как столбец
+            </Label>
+          </div>
+          
+          <div className="flex items-center space-x-2">
+            <Checkbox 
+              id="skipEmptyRows"
+              checked={settings.skipEmptyRows}
+              onCheckedChange={(checked) => 
+                onUpdateSettings({ skipEmptyRows: !!checked })
+              }
+            />
+            <Label htmlFor="skipEmptyRows" className="cursor-pointer">
+              Пропускать пустые строки
+            </Label>
+          </div>
+        </div>
+      )}
+      
+      {(settings.consolidationType === "summary" || settings.consolidationType === "pivot") && (
+        <>
+          <div className="space-y-4">
+            <h3 className="text-lg font-medium">Настройки группировки и агрегации</h3>
+            
+            <div className="space-y-2">
+              <Label htmlFor="groupByColumn">Группировать по столбцу</Label>
               <Select
-                disabled={!filesExist || availableColumns.length === 0}
                 value={settings.groupByColumn || ""}
                 onValueChange={(value) => 
                   onUpdateSettings({ groupByColumn: value || null })
                 }
+                disabled={availableColumns.length === 0}
               >
-                <SelectTrigger id="group-by-column">
+                <SelectTrigger id="groupByColumn">
                   <SelectValue placeholder="Выберите столбец для группировки" />
                 </SelectTrigger>
                 <SelectContent>
@@ -112,192 +150,93 @@ const ConsolidationSettingsComponent = ({
                   ))}
                 </SelectContent>
               </Select>
-              <p className="text-xs text-muted-foreground">
-                Данные будут сгруппированы по значениям этого столбца
-              </p>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="aggregation-function">Функция агрегации</Label>
-              <Select
-                disabled={!filesExist}
-                value={settings.aggregationFunction}
-                onValueChange={(value: "sum" | "average" | "max" | "min" | "count") => 
-                  onUpdateSettings({ aggregationFunction: value })
-                }
-              >
-                <SelectTrigger id="aggregation-function">
-                  <SelectValue placeholder="Выберите функцию агрегации" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="sum">Сумма</SelectItem>
-                  <SelectItem value="average">Среднее значение</SelectItem>
-                  <SelectItem value="max">Максимум</SelectItem>
-                  <SelectItem value="min">Минимум</SelectItem>
-                  <SelectItem value="count">Количество</SelectItem>
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                Эта функция будет применена к числовым столбцам при группировке
-              </p>
             </div>
             
-            <Accordion type="single" collapsible className="w-full">
-              <AccordionItem value="value-columns">
-                <AccordionTrigger className="py-2">
-                  Выбор столбцов со значениями
-                </AccordionTrigger>
-                <AccordionContent>
-                  {availableColumns.length === 0 ? (
-                    <p className="text-sm text-muted-foreground py-2">
-                      Нет доступных столбцов
-                    </p>
-                  ) : (
-                    <div className="space-y-2 py-2">
-                      <p className="text-sm text-muted-foreground">
-                        Выберите столбцы с числовыми данными для агрегации:
-                      </p>
-                      <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
-                        {availableColumns.map(column => (
-                          <div key={column} className="flex items-center space-x-2">
-                            <Checkbox
-                              id={`value-column-${column}`}
-                              checked={settings.valueColumns.includes(column)}
-                              onCheckedChange={() => handleValueColumnToggle(column)}
-                            />
-                            <label
-                              htmlFor={`value-column-${column}`}
-                              className="text-sm cursor-pointer"
-                            >
-                              {column}
-                            </label>
-                          </div>
-                        ))}
-                      </div>
+            {settings.consolidationType === "summary" && (
+              <div className="space-y-2">
+                <Label htmlFor="aggregationFunction">Функция агрегации</Label>
+                <Select
+                  value={settings.aggregationFunction}
+                  onValueChange={(value: 'sum' | 'average' | 'max' | 'min' | 'count') => 
+                    onUpdateSettings({ aggregationFunction: value })
+                  }
+                >
+                  <SelectTrigger id="aggregationFunction">
+                    <SelectValue placeholder="Выберите функцию агрегации" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="sum">Сумма</SelectItem>
+                    <SelectItem value="average">Среднее</SelectItem>
+                    <SelectItem value="max">Максимум</SelectItem>
+                    <SelectItem value="min">Минимум</SelectItem>
+                    <SelectItem value="count">Количество</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
+          
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <Label>Столбцы для расчета</Label>
+              <span className="text-xs text-muted-foreground">
+                Выбрано: {settings.valueColumns.length}
+              </span>
+            </div>
+            
+            {availableColumns.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Загрузите файлы для выбора столбцов
+              </p>
+            ) : (
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                {availableColumns
+                  .filter(col => col !== settings.groupByColumn)
+                  .map(column => (
+                    <div key={column} className="flex items-center space-x-2">
+                      <Checkbox 
+                        id={`col-${column}`}
+                        checked={settings.valueColumns.includes(column)}
+                        onCheckedChange={() => handleValueColumnToggle(column)}
+                      />
+                      <Label 
+                        htmlFor={`col-${column}`} 
+                        className="cursor-pointer truncate"
+                        title={column}
+                      >
+                        {column}
+                      </Label>
                     </div>
-                  )}
-                </AccordionContent>
-              </AccordionItem>
-            </Accordion>
-          </>
-        )}
-        
-        <div className="pt-4 space-y-2">
-          <h3 className="text-sm font-medium">Дополнительные настройки</h3>
-          <div className="space-y-2">
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="skip-empty-rows"
-                checked={settings.skipEmptyRows}
-                onCheckedChange={(checked) => 
-                  onUpdateSettings({ skipEmptyRows: !!checked })
+                  ))
                 }
-              />
-              <label
-                htmlFor="skip-empty-rows"
-                className="text-sm cursor-pointer"
-              >
-                Пропускать пустые строки
-              </label>
-            </div>
+              </div>
+            )}
             
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="preserve-headers"
-                checked={settings.preserveHeaders}
-                onCheckedChange={(checked) => 
-                  onUpdateSettings({ preserveHeaders: !!checked })
-                }
-              />
-              <label
-                htmlFor="preserve-headers"
-                className="text-sm cursor-pointer"
-              >
-                Сохранять заголовки столбцов
-              </label>
+            <div className="flex flex-wrap gap-2 mt-2">
+              {settings.valueColumns.map(column => (
+                <Badge key={column} variant="secondary" className="text-xs">
+                  {column}
+                </Badge>
+              ))}
             </div>
           </div>
-        </div>
-      </div>
-      
-      {(settings.consolidationType === "summary" || settings.consolidationType === "pivot") && 
-       (!settings.groupByColumn || settings.valueColumns.length === 0) && (
-        <Alert variant="warning" className="mt-4">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Требуется дополнительная настройка</AlertTitle>
-          <AlertDescription>
-            {!settings.groupByColumn && "Выберите столбец для группировки. "}
-            {settings.valueColumns.length === 0 && "Выберите хотя бы один столбец со значениями."}
-          </AlertDescription>
-        </Alert>
+          
+          <div className="flex items-center space-x-2">
+            <Checkbox 
+              id="skipEmptyRows"
+              checked={settings.skipEmptyRows}
+              onCheckedChange={(checked) => 
+                onUpdateSettings({ skipEmptyRows: !!checked })
+              }
+            />
+            <Label htmlFor="skipEmptyRows" className="cursor-pointer">
+              Пропускать строки с пустыми значениями ключевого столбца
+            </Label>
+          </div>
+        </>
       )}
-      
-      <Accordion type="single" collapsible className="w-full">
-        <AccordionItem value="preview">
-          <AccordionTrigger>
-            <div className="flex items-center gap-2">
-              <Settings2 className="h-4 w-4" />
-              <span>Предпросмотр настроек</span>
-            </div>
-          </AccordionTrigger>
-          <AccordionContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Параметр</TableHead>
-                  <TableHead>Значение</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                <TableRow>
-                  <TableCell>Тип консолидации</TableCell>
-                  <TableCell>
-                    {settings.consolidationType === "append" && "Простое объединение"}
-                    {settings.consolidationType === "summary" && "Сводка по группам"}
-                    {settings.consolidationType === "pivot" && "Сводная таблица"}
-                  </TableCell>
-                </TableRow>
-                {(settings.consolidationType === "summary" || settings.consolidationType === "pivot") && (
-                  <>
-                    <TableRow>
-                      <TableCell>Столбец группировки</TableCell>
-                      <TableCell>{settings.groupByColumn || "Не выбран"}</TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell>Функция агрегации</TableCell>
-                      <TableCell>
-                        {settings.aggregationFunction === "sum" && "Сумма"}
-                        {settings.aggregationFunction === "average" && "Среднее значение"}
-                        {settings.aggregationFunction === "max" && "Максимум"}
-                        {settings.aggregationFunction === "min" && "Минимум"}
-                        {settings.aggregationFunction === "count" && "Количество"}
-                      </TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell>Выбранные столбцы значений</TableCell>
-                      <TableCell>
-                        {settings.valueColumns.length > 0 
-                          ? settings.valueColumns.join(", ")
-                          : "Не выбраны"}
-                      </TableCell>
-                    </TableRow>
-                  </>
-                )}
-                <TableRow>
-                  <TableCell>Пропускать пустые строки</TableCell>
-                  <TableCell>{settings.skipEmptyRows ? "Да" : "Нет"}</TableCell>
-                </TableRow>
-                <TableRow>
-                  <TableCell>Сохранять заголовки</TableCell>
-                  <TableCell>{settings.preserveHeaders ? "Да" : "Нет"}</TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
-          </AccordionContent>
-        </AccordionItem>
-      </Accordion>
     </div>
   );
 };
 
-export default ConsolidationSettingsComponent;
+export default ConsolidationSettings;

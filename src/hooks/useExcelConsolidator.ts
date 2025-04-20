@@ -5,8 +5,7 @@ import {
   consolidateExcelFiles, 
   downloadAsExcel, 
   extractAvailableColumns,
-  readExcelFile,
-  prepareChartData
+  readExcelFile 
 } from '@/utils/excelConsolidator';
 
 /**
@@ -15,7 +14,6 @@ import {
 export function useExcelConsolidator() {
   const [files, setFiles] = useState<FileData[]>([]);
   const [consolidatedData, setConsolidatedData] = useState<any[] | null>(null);
-  const [chartData, setChartData] = useState<any[] | null>(null);
   const [availableColumns, setAvailableColumns] = useState<string[]>([]);
   const [settings, setSettings] = useState<ConsolidationSettings>({
     consolidationType: "append",
@@ -30,31 +28,19 @@ export function useExcelConsolidator() {
 
   // Обновление доступных столбцов при изменении списка файлов
   useEffect(() => {
-    const columns = extractAvailableColumns(files);
-    setAvailableColumns(columns);
-    
-    // Если текущий groupByColumn больше не доступен, сбрасываем его
-    if (settings.groupByColumn && !columns.includes(settings.groupByColumn)) {
-      setSettings(prev => ({ ...prev, groupByColumn: null }));
-    }
-    
-    // Обновляем список выбранных столбцов для значений
-    setSettings(prev => ({
-      ...prev,
-      valueColumns: prev.valueColumns.filter(col => columns.includes(col))
-    }));
+    setAvailableColumns(extractAvailableColumns(files));
   }, [files]);
 
   /**
    * Обработчик загрузки файлов
    */
-  const handleFileUpload = async (files: File[]) => {
-    if (!files.length) return;
+  const handleFileUpload = async (uploadedFiles: File[]) => {
+    if (!uploadedFiles.length) return;
     
     const newFiles: FileData[] = [];
     
     try {
-      for (const file of files) {
+      for (const file of uploadedFiles) {
         try {
           const fileData = await readExcelFile(file);
           
@@ -100,27 +86,20 @@ export function useExcelConsolidator() {
     if (selectedFiles.length === 0) {
       toast({
         title: "Нет выбранных файлов",
-        description: "Выберите хотя бы один файл для обработки",
+        description: "Выберите хотя бы один файл для консолидации",
         variant: "destructive",
       });
       return;
     }
     
-    // Проверяем настройки
-    if (settings.consolidationType !== "append" && !settings.groupByColumn) {
+    // Валидация настроек для сводки и сводной таблицы
+    if (
+      (settings.consolidationType === "summary" || settings.consolidationType === "pivot") && 
+      (!settings.groupByColumn || settings.valueColumns.length === 0)
+    ) {
       toast({
-        title: "Неполные настройки",
-        description: "Для сводки или сводной таблицы необходимо выбрать столбец для группировки",
-        variant: "destructive",
-      });
-      return;
-    }
-    
-    if ((settings.consolidationType === "summary" || settings.consolidationType === "pivot") && 
-        settings.valueColumns.length === 0) {
-      toast({
-        title: "Неполные настройки",
-        description: "Необходимо выбрать хотя бы один столбец со значениями",
+        title: "Недостаточно параметров",
+        description: "Выберите столбец для группировки и столбцы значений",
         variant: "destructive",
       });
       return;
@@ -129,10 +108,10 @@ export function useExcelConsolidator() {
     // Выполняем консолидацию
     const result = consolidateExcelFiles(selectedFiles, settings);
     
-    if (!result) {
+    if (!result || result.length === 0) {
       toast({
         title: "Ошибка консолидации",
-        description: "Не удалось объединить данные",
+        description: "Не удалось консолидировать файлы или результат пуст",
         variant: "destructive",
       });
       return;
@@ -140,15 +119,9 @@ export function useExcelConsolidator() {
     
     setConsolidatedData(result);
     
-    // Подготавливаем данные для диаграммы
-    if (settings.groupByColumn) {
-      const chartData = prepareChartData(result, settings.groupByColumn);
-      setChartData(chartData);
-    }
-    
     toast({
-      title: "Данные обработаны",
-      description: `Успешно обработано ${selectedFiles.length} файлов`,
+      title: "Файлы консолидированы",
+      description: `Успешно консолидировано ${selectedFiles.length} файлов`,
     });
   };
 
@@ -201,13 +174,12 @@ export function useExcelConsolidator() {
    * Обновление настроек консолидации
    */
   const updateSettings = (newSettings: Partial<ConsolidationSettings>) => {
-    setSettings(prev => ({ ...prev, ...newSettings }));
+    setSettings({ ...settings, ...newSettings });
   };
 
   return {
     files,
     consolidatedData,
-    chartData,
     availableColumns,
     settings,
     handleFileUpload,
